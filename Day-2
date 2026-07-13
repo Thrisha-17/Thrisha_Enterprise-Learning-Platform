@@ -1,0 +1,24 @@
+GIT:
+  1. GIT PULL --> Downloads changes and immediately merges them 
+  3. GIT COMMIT --> Saves changes locally for a repository
+  2. GIT PUSH --> Uploads saved changes to remote server
+  4. GIT FETCH --ALL  --> Fetch and collect all updates after commits made by another user.
+  5. GIT BRANCH V/S GIT BRANCH --ALL 
+         GIT BRANCH --> Shows current branch
+         GIT BRANCH --ALL --> Lists all branches in local repository
+  6. GIT INIT--> Initializes a new, empty Git repository in the current folder
+  7. GIT CHECKOUT --> Command is used to navigate between branches, create new branches, or discard uncommitted changes in your files
+  8. GIT REMOTE --> Lists all remote repositories linked to your local project
+  9. GIT REVERT--> Command safely undoes a previous commit by creating a brand-new commit with the exact opposite changes, ensuring your project's commit history remains completely untouched.
+  10. GIT RESET --> Moves branch pointer to different commit
+      TYPES:
+      1. SOFT RESET -->REMOVES LAST COMMIT BUT KEEPS ALL CHANGES SAVED
+      2. HARD RESET -->REMOVES LAST COMMIT, UNSTAGES THE CHANGES, BUT KEEP THEM IN YOUR DIRECTORY
+  11. GIT LOG --> Shows the full commit history
+  12. GIT STATUS --> Basically shows status of my local repository files i.e., which files are modified, staged, or untracked
+  13. GIT CHECKOUT --> Switches to the specified branch
+  14. GIT SWITCH --> A clearer alternative to checkout for switching branches
+  15. GIT CHERRY-PICK --> The command used to copy a specific commit from one branch and apply it as a new commit onto your current branch
+  16. GIT CLONE --> Creates a copy of an existing repository
+  17. GIT REBASE --> Moves commits from one branch onto another
+  18. GIT MERGE --> Combines two branches by creating a merge commit
