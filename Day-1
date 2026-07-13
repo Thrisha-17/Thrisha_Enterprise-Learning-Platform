@@ -1,0 +1,305 @@
+
+JWT (JSON Web Token)
+What is JWT?
+JWT (JSON Web Token) is a lightweight and secure way to send user information between the client (browser/mobile app) and the server.
+
+After a user logs in successfully, the server creates a JWT token and sends it to the client. The client stores this token and sends it with every future request. The server checks the token before allowing access to protected pages or APIs.
+
+In simple words:
+
+JWT acts like a digital identity card. Once you log in, you don't have to enter your username and password for every request. The token proves who you are.
+
+Why is JWT used?
+Secure communication between client and server
+
+User doesn't need to log in repeatedly
+
+Stateless authentication (server doesn't store user sessions)
+
+Faster than traditional session-based authentication
+
+Widely used in modern web applications
+
+Client and Server Communication
+Without JWT
+User enters username and password.
+
+Server checks credentials.
+
+Every new request needs authentication again.
+
+With JWT
+User logs in.
+
+Server verifies username and password.
+
+Server generates a JWT token.
+
+Client stores the token.
+
+Client sends the token with every request.
+
+Server verifies the token.
+
+If valid, access is granted.
+
+Structure of JWT
+A JWT has three parts separated by dots (.).
+
+Header.Payload.Signature
+Example
+
+xxxxx.yyyyy.zzzzz
+1. Header
+Contains information about the token.
+
+Example
+
+{
+ "alg": "HS256",
+ "typ": "JWT"
+}
+It tells
+
+Which algorithm is used
+
+That this is a JWT token
+
+2. Payload
+Contains the user information (claims).
+
+Example
+
+{
+ "username":"john",
+ "role":"USER",
+ "exp":1720000000
+}
+It stores
+
+Username
+
+User role
+
+Expiry time
+
+Other user details
+
+3. Signature
+The signature ensures that nobody has modified the token.
+
+The server creates it using
+
+Header
+
+Payload
+
+Secret Key
+
+If someone changes the payload, the signature becomes invalid.
+
+JWT Utility Class
+Usually we create a helper class like this.
+
+public class JwtUtil {
+
+    // Create JWT Token
+    public String generateToken(String username) {
+        ...
+    }
+
+    // Read username from token
+    public String extractUsername(String token) {
+        ...
+    }
+
+    // Check whether token is valid
+    public boolean validateToken(String token) {
+        ...
+    }
+}
+Methods
+generateToken()
+Creates a JWT after successful login.
+
+Input:
+
+Username
+
+Output:
+
+JWT Token
+
+extractUsername()
+Reads the username stored inside the token.
+
+validateToken()
+Checks whether
+
+Token is genuine
+
+Token is expired
+
+Signature is correct
+
+Returns
+
+true → Valid token
+
+false → Invalid token
+
+JWT Service / JWT Util / JWT Token Provider
+Different projects may use different class names.
+
+Examples
+
+JwtService
+
+JwtUtil
+
+JwtTokenProvider
+
+All perform similar tasks:
+
+Generate token
+
+Validate token
+
+Read user information
+
+Check expiry
+
+Hashing, Encryption and Decryption
+This is a very common interview question.
+
+Hashing
+Hashing converts data into a fixed-length value.
+
+Example
+
+Password
+
+↓
+
+8d969eef6ecad3...
+Characteristics
+
+One-way process
+
+Cannot be reversed
+
+Used for storing passwords securely
+
+Common algorithms:
+
+BCrypt
+
+SHA-256 (not recommended alone for passwords)
+
+Argon2
+
+Example
+
+User Password
+
+↓
+
+BCrypt Hash
+
+↓
+
+Stored in Database
+Encryption
+Encryption converts readable data into unreadable data using a key.
+
+Example
+
+Hello
+
+↓
+
+Encrypted Text
+
+↓
+
+jf82jsn3js...
+Purpose
+
+Protect sensitive information
+
+Can be converted back
+
+Decryption
+Decryption converts encrypted data back into its original form using the correct key.
+
+Example
+
+Encrypted Data
+
+↓
+
+Decryption
+
+↓
+
+Hello
+Difference
+Hashing	Encryption
+One-way process	Two-way process
+Cannot be reversed	Can be reversed using a key
+Used for passwords	Used for secure data transmission
+No decryption	Requires decryption
+Google Sign-In
+Google Sign-In allows users to log in using their Google account instead of creating a new username and password.
+
+How it works
+User clicks "Sign in with Google."
+
+Google asks the user to choose an account.
+
+Google verifies the user's identity.
+
+Google sends user details (like email and name) to your application.
+
+Your server verifies the information.
+
+Your application creates its own JWT token for future requests.
+
+Benefits
+
+Faster login
+
+No need to remember another password
+
+More secure authentication
+
+Better user experience
+
+Google API (Simple Explanation)
+A Google API is a service provided by Google that lets your application use Google features such as:
+
+Google Sign-In
+
+Google Maps
+
+Gmail
+
+Google Drive
+
+YouTube
+
+Google Calendar
+
+Think of it like this:
+
+A Google API is a bridge between your application and Google's services. Instead of building everything yourself, your app asks Google to perform tasks such as logging in users or displaying maps.
+
+Example:
+
+Your app wants users to log in with Google.
+
+It sends a request to the Google Sign-In API.
+
+Google authenticates the user and returns their profile information.
+
+Your server verifies it and issues a JWT for your application.
