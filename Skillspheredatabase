@@ -1,0 +1,362 @@
+-- =========================================================================
+-- SKILLSPHERE & WORKFORCE MANAGEMENT PLATFORM DATABASE INITIALIZATION
+-- =========================================================================
+DROP DATABASE IF EXISTS skillsphere;
+CREATE DATABASE skillsphere;
+USE skillsphere;
+
+-- =========================================================================
+-- 2. AUTHENTICATION & USER MANAGEMENT
+-- =========================================================================
+
+CREATE TABLE users (
+    id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    username       VARCHAR(50) NOT NULL,
+    full_name      VARCHAR(100) NOT NULL,
+    email          VARCHAR(100) NOT NULL,
+    password_hash  VARCHAR(255) NULL, -- BCrypt hash; null for Google-only accounts
+    role           ENUM('STUDENT','EMPLOYEE','MANAGER','ADMIN') NOT NULL,
+    provider       ENUM('LOCAL','GOOGLE') NOT NULL,
+    provider_id    VARCHAR(255) NULL, -- Google's unique subject id (sub claim)
+    is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+    last_login_at  TIMESTAMP NULL,
+    created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_users_username (username),
+    UNIQUE KEY uq_users_email (email)
+);
+
+CREATE TABLE refresh_tokens (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     BIGINT UNSIGNED NOT NULL,
+    token_hash  VARCHAR(255) NOT NULL, -- Hashed refresh token (raw token never stored)
+    expires_at  TIMESTAMP NOT NULL,
+    revoked     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_tokens_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE email_verifications (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     BIGINT UNSIGNED NOT NULL,
+    otp_code    VARCHAR(255) NOT NULL, -- Holds OTP code or link token sent to email
+    expires_at  TIMESTAMP NOT NULL,
+    verified_at TIMESTAMP NULL,
+    CONSTRAINT fk_verifications_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE password_reset_tokens (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     BIGINT UNSIGNED NOT NULL,
+    token_hash  VARCHAR(255) NOT NULL,
+    expires_at  TIMESTAMP NOT NULL,
+    used        BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT fk_resets_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE login_history (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     BIGINT UNSIGNED NOT NULL,
+    ip_address  VARCHAR(45) NOT NULL,
+    device_info VARCHAR(255) NOT NULL,
+    status      ENUM('SUCCESS','FAILED') NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_login_history_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- =========================================================================
+-- 3. STUDENT PORTAL
+-- =========================================================================
+
+CREATE TABLE courses (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    title       VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    xp_reward   INT NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE course_modules (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    course_id   BIGINT UNSIGNED NOT NULL,
+    title       VARCHAR(255) NOT NULL,
+    type        ENUM('LECTURE','QUIZ','ASSIGNMENT') NOT NULL,
+    max_score   INT NOT NULL, -- Maximum achievable score for quiz/assignment modules
+    CONSTRAINT fk_modules_course FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE
+);
+
+CREATE TABLE student_progress (
+    id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    student_id   BIGINT UNSIGNED NOT NULL,
+    course_id    BIGINT UNSIGNED NOT NULL,
+    status       ENUM('ENROLLED','IN_PROGRESS','COMPLETED') NOT NULL DEFAULT 'ENROLLED',
+    completed_at TIMESTAMP NULL,
+    CONSTRAINT fk_progress_student FOREIGN KEY (student_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_progress_course FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE
+);
+
+CREATE TABLE submissions (
+    id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id      BIGINT UNSIGNED NOT NULL,
+    module_id    BIGINT UNSIGNED NOT NULL,
+    score        INT NULL, -- Nullable until graded
+    submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_submissions_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_submissions_module FOREIGN KEY (module_id) REFERENCES course_modules (id) ON DELETE CASCADE
+);
+
+CREATE TABLE certificates (
+    id                BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id           BIGINT UNSIGNED NOT NULL,
+    course_id         BIGINT UNSIGNED NOT NULL,
+    issued_at         TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    certificate_url   VARCHAR(255) NOT NULL,
+    verification_code VARCHAR(50) NOT NULL,
+    UNIQUE KEY uq_cert_code (verification_code),
+    CONSTRAINT fk_certs_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_certs_course FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE
+);
+
+CREATE TABLE course_instructors (
+    course_id     BIGINT UNSIGNED NOT NULL,
+    instructor_id BIGINT UNSIGNED NOT NULL,
+    assigned_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (course_id, instructor_id),
+    CONSTRAINT fk_instructors_course FOREIGN KEY (course_id) REFERENCES courses (id) ON DELETE CASCADE,
+    CONSTRAINT fk_instructors_user FOREIGN KEY (instructor_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- =========================================================================
+-- 4. GAMIFICATION ENGINE
+-- =========================================================================
+
+CREATE TABLE leaderboards (
+    id               BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id          BIGINT UNSIGNED NOT NULL,
+    total_xp         INT NOT NULL DEFAULT 0,
+    current_streak   INT NOT NULL DEFAULT 0,
+    last_active_date DATE NULL,
+    updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_leaderboard_user (user_id),
+    CONSTRAINT fk_leaderboard_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE badges (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(100) NOT NULL,
+    description TEXT NOT NULL,
+    icon_url    VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE user_badges (
+    user_id   BIGINT UNSIGNED NOT NULL,
+    badge_id  BIGINT UNSIGNED NOT NULL,
+    earned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, badge_id),
+    CONSTRAINT fk_user_badges_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_badges_badge FOREIGN KEY (badge_id) REFERENCES badges (id) ON DELETE CASCADE
+);
+
+CREATE TABLE xp_transactions (
+    id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id      BIGINT UNSIGNED NOT NULL,
+    amount       INT NOT NULL, -- Positive or negative XP change
+    reason       VARCHAR(255) NOT NULL,
+    reference_id BIGINT UNSIGNED NULL, -- Links to related course/module records if applicable
+    created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_xp_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE streak_logs (
+    id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id       BIGINT UNSIGNED NOT NULL,
+    activity_date DATE NOT NULL,
+    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_streaks_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- =========================================================================
+-- 5. WORKFORCE PORTAL
+-- =========================================================================
+
+CREATE TABLE companies (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE workforce_profiles (
+    user_id           BIGINT UNSIGNED PRIMARY KEY,
+    company_id        BIGINT UNSIGNED NOT NULL,
+    designation       VARCHAR(100) NOT NULL,
+    manager_id        BIGINT UNSIGNED NULL, -- Self-referencing FK to another employee/manager
+    performance_score DECIMAL(5,2) NULL,
+    quarterly_goals   DECIMAL(5,2) NULL,
+    CONSTRAINT fk_workforce_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_workforce_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE CASCADE,
+    CONSTRAINT fk_workforce_manager FOREIGN KEY (manager_id) REFERENCES workforce_profiles (user_id) ON DELETE SET NULL
+);
+
+CREATE TABLE departments (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    company_id BIGINT UNSIGNED NOT NULL,
+    name       VARCHAR(100) NOT NULL,
+    head_id    BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_departments_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE CASCADE,
+    CONSTRAINT fk_departments_head FOREIGN KEY (head_id) REFERENCES workforce_profiles (user_id) ON DELETE SET NULL
+);
+
+CREATE TABLE projects (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    company_id BIGINT UNSIGNED NOT NULL,
+    name       VARCHAR(255) NOT NULL,
+    status     ENUM('ACTIVE','COMPLETED','ON_HOLD') NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_projects_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE CASCADE
+);
+
+CREATE TABLE project_assignments (
+    project_id  BIGINT UNSIGNED NOT NULL,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (project_id, employee_id),
+    CONSTRAINT fk_assignments_project FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
+    CONSTRAINT fk_assignments_employee FOREIGN KEY (employee_id) REFERENCES workforce_profiles (user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE attendance (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    work_date   DATE NOT NULL,
+    status      ENUM('PRESENT','ABSENT','LEAVE') NOT NULL,
+    clock_in    TIMESTAMP NULL,
+    clock_out   TIMESTAMP NULL,
+    CONSTRAINT fk_attendance_employee FOREIGN KEY (employee_id) REFERENCES workforce_profiles (user_id) ON DELETE CASCADE
+);
+
+CREATE TABLE leave_requests (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_id BIGINT UNSIGNED NOT NULL,
+    start_date  DATE NOT NULL,
+    end_date    DATE NOT NULL,
+    reason      VARCHAR(255) NOT NULL,
+    status      ENUM('PENDING','APPROVED','REJECTED') NOT NULL DEFAULT 'PENDING',
+    approved_by BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_leaves_employee FOREIGN KEY (employee_id) REFERENCES workforce_profiles (user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_leaves_approver FOREIGN KEY (approved_by) REFERENCES workforce_profiles (user_id) ON DELETE SET NULL
+);
+
+CREATE TABLE performance_reviews (
+    id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    employee_id   BIGINT UNSIGNED NOT NULL,
+    reviewer_id   BIGINT UNSIGNED NOT NULL,
+    review_period VARCHAR(20) NOT NULL, -- e.g., 'Q1-2026'
+    score         DECIMAL(5,2) NOT NULL,
+    comments      TEXT NOT NULL,
+    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_reviews_employee FOREIGN KEY (employee_id) REFERENCES workforce_profiles (user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_reviews_reviewer FOREIGN KEY (reviewer_id) REFERENCES workforce_profiles (user_id) ON DELETE CASCADE
+);
+
+-- =========================================================================
+-- 6. AI ASSISTANT
+-- =========================================================================
+
+CREATE TABLE ai_conversations (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT UNSIGNED NOT NULL,
+    title      VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_conv_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE ai_messages (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    conversation_id BIGINT UNSIGNED NOT NULL,
+    sender          ENUM('USER','AI') NOT NULL,
+    message         TEXT NOT NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_msg_conv FOREIGN KEY (conversation_id) REFERENCES ai_conversations (id) ON DELETE CASCADE
+);
+
+CREATE TABLE ai_generated_reports (
+    id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    company_id    BIGINT UNSIGNED NOT NULL,
+    generated_for VARCHAR(100) NOT NULL, -- e.g., 'monthly performance summary'
+    content       TEXT NOT NULL,         -- Stored directly as text or valid structural JSON
+    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_reports_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE CASCADE
+);
+
+-- =========================================================================
+-- 7. AUTOMATION
+-- =========================================================================
+
+CREATE TABLE notifications (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT UNSIGNED NOT NULL,
+    type       VARCHAR(50) NOT NULL, -- e.g., 'reminder', 'alert', 'badge_earned'
+    message    VARCHAR(255) NOT NULL,
+    is_read    BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE scheduled_tasks (
+    id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id      BIGINT UNSIGNED NOT NULL,
+    title        VARCHAR(255) NOT NULL,
+    scheduled_at TIMESTAMP NOT NULL,
+    status       ENUM('PENDING','COMPLETED','MISSED') NOT NULL DEFAULT 'PENDING',
+    CONSTRAINT fk_tasks_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+-- =========================================================================
+-- 8. MARKETING & SITE CONTENT
+-- =========================================================================
+
+CREATE TABLE testimonials (
+    id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_name      VARCHAR(100) NOT NULL,
+    user_role      VARCHAR(100) NOT NULL, -- e.g., 'Computer Science Student', 'HR Manager'
+    avatar_initial CHAR(1) NOT NULL,
+    review_text    TEXT NOT NULL,
+    rating         INT NOT NULL, -- Star rating (1-5)
+    is_visible     BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE platform_analytics_cache (
+    metric_key   VARCHAR(50) PRIMARY KEY, -- e.g., 'active_learners'
+    metric_value VARCHAR(50) NOT NULL,    -- e.g., '25K+', '99%'
+    updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE contact_messages (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(100) NOT NULL,
+    email      VARCHAR(100) NOT NULL,
+    message    TEXT NOT NULL,
+    status     ENUM('NEW','IN_PROGRESS','RESOLVED') NOT NULL DEFAULT 'NEW',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE pricing_plans (
+    id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name          VARCHAR(100) NOT NULL, -- e.g., 'Starter', 'Pro', 'Enterprise'
+    price         DECIMAL(10,2) NOT NULL,
+    features      TEXT NOT NULL,         -- Text summary or structural JSON configuration
+    billing_cycle ENUM('MONTHLY','YEARLY') NOT NULL
+);
+
+CREATE TABLE subscriptions (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    company_id BIGINT UNSIGNED NOT NULL,
+    plan_id    BIGINT UNSIGNED NOT NULL,
+    start_date DATE NOT NULL,
+    end_date   DATE NOT NULL,
+    status     ENUM('ACTIVE','CANCELLED','EXPIRED') NOT NULL DEFAULT 'ACTIVE',
+    CONSTRAINT fk_subs_company FOREIGN KEY (company_id) REFERENCES companies (id) ON DELETE CASCADE,
+    CONSTRAINT fk_subs_plan FOREIGN KEY (plan_id) REFERENCES pricing_plans (id) ON DELETE CASCADE
+);
+SHOW TABLES;
+SELECT * FROM users;
