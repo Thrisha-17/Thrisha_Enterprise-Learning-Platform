@@ -36,9 +36,12 @@ to your assigned API's base URL, and update the endpoint paths (`/posts`, `/post
 api-testing-assignment/
 ├── pom.xml
 ├── README.md
-├── Assignment-2.md
-└── src
-    └── test
-        └── java
-            └── ApiTest.java
+├── src
+│   └── test
+│       └── java
+│           └── ApiTest.java
+└── target
+    └── surefire-reports
+        ├── ApiTest.txt
+        └── TEST-ApiTest.xml
 ```
